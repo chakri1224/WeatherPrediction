@@ -12,9 +12,8 @@ import {
   LineController,
   BarController,
 } from 'chart.js';
-import { Cloud, Sun, CloudRain, MapPin, Calendar, Thermometer } from 'lucide-react';
+import { Cloud, Sun, CloudRain, MapPin, Calendar, Search, Droplets, Wind, Eye, Thermometer } from 'lucide-react';
 
-// Register Chart.js components
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -34,7 +33,8 @@ const WeatherDashboard = () => {
   const [city, setCity] = useState('London');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
+  const [isVisible, setIsVisible] = useState(false);
+
   const tempChartRef = useRef(null);
   const humidityChartRef = useRef(null);
   const tempChartInstance = useRef(null);
@@ -43,88 +43,25 @@ const WeatherDashboard = () => {
   const API_KEY = 'bfac9ce8ea81a7cafe0a5818d7ba00a8';
   const BASE_URL = 'https://api.openweathermap.org/data/2.5';
 
-  // Mock data generator for different cities
-  const generateMockWeatherData = (cityName) => {
-    const cities = {
-      'london': { baseTemp: 15, humidity: 70, condition: 'Clouds' },
-      'new york': { baseTemp: 20, humidity: 60, condition: 'Clear' },
-      'tokyo': { baseTemp: 25, humidity: 80, condition: 'Rain' },
-      'paris': { baseTemp: 18, humidity: 65, condition: 'Clouds' },
-      'mumbai': { baseTemp: 30, humidity: 85, condition: 'Clear' },
-      'sydney': { baseTemp: 22, humidity: 55, condition: 'Clear' },
-      'dubai': { baseTemp: 35, humidity: 40, condition: 'Clear' },
-      'moscow': { baseTemp: 5, humidity: 75, condition: 'Snow' }
-    };
-
-    const cityKey = cityName.toLowerCase();
-    const cityData = cities[cityKey] || cities['london'];
-    
-    const tempVariation = (Math.random() - 0.5) * 6;
-    const humidityVariation = (Math.random() - 0.5) * 20;
-    
-    const currentWeather = {
-      name: cityName.charAt(0).toUpperCase() + cityName.slice(1),
-      main: {
-        temp: Math.round(cityData.baseTemp + tempVariation),
-        feels_like: Math.round(cityData.baseTemp + tempVariation - 2),
-        humidity: Math.max(20, Math.min(100, Math.round(cityData.humidity + humidityVariation))),
-        pressure: Math.round(1013 + (Math.random() - 0.5) * 40)
-      },
-      weather: [{
-        main: cityData.condition,
-        description: getWeatherDescription(cityData.condition),
-        icon: '03d'
-      }],
-      wind: {
-        speed: Math.round((Math.random() * 8 + 1) * 10) / 10
-      }
-    };
-
-    const forecastList = [];
-    for (let i = 0; i < 8; i++) {
-      const hourlyTempVariation = (Math.random() - 0.5) * 8;
-      const hourlyHumidityVariation = (Math.random() - 0.5) * 15;
-      
-      forecastList.push({
-        dt: Date.now() + (i * 3600000),
-        main: {
-          temp: Math.round(cityData.baseTemp + hourlyTempVariation),
-          humidity: Math.max(20, Math.min(100, Math.round(cityData.humidity + hourlyHumidityVariation)))
-        },
-        weather: [{
-          main: i % 3 === 0 ? 'Rain' : i % 2 === 0 ? 'Clouds' : 'Clear'
-        }]
-      });
-    }
-
-    return {
-      current: currentWeather,
-      forecast: { list: forecastList }
-    };
-  };
-
-  const getWeatherDescription = (condition) => {
-    const descriptions = {
-      'Clear': 'clear sky',
-      'Clouds': 'scattered clouds',
-      'Rain': 'light rain',
-      'Snow': 'light snow'
-    };
-    return descriptions[condition] || 'partly cloudy';
-  };
-
   const fetchWeatherData = async () => {
     setLoading(true);
     setError('');
+    setIsVisible(false);
     
     try {
-      setTimeout(() => {
-        const weatherData = generateMockWeatherData(city);
-        setCurrentWeather(weatherData.current);
-        setForecast(weatherData.forecast);
-        setLoading(false);
-      }, 800);
+      const res1 = await fetch(`${BASE_URL}/weather?q=${city}&appid=${API_KEY}&units=metric`);
+      const res2 = await fetch(`${BASE_URL}/forecast?q=${city}&appid=${API_KEY}&units=metric`);
+
+      if (!res1.ok || !res2.ok) throw new Error('Failed to fetch');
+
+      const current = await res1.json();
+      const forecast = await res2.json();
+
+      setCurrentWeather(current);
+      setForecast(forecast);
+      setLoading(false);
       
+      setTimeout(() => setIsVisible(true), 100);
     } catch (err) {
       setError('Failed to fetch weather data');
       setLoading(false);
@@ -139,8 +76,10 @@ const WeatherDashboard = () => {
     }
 
     const ctx = tempChartRef.current.getContext('2d');
-    const labels = forecast.list.map((item, index) => `${index * 3}h`);
-    const temperatures = forecast.list.map(item => item.main.temp);
+    const labels = forecast.list.slice(0, 8).map(item =>
+      new Date(item.dt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    );
+    const temperatures = forecast.list.slice(0, 8).map(item => item.main.temp);
 
     tempChartInstance.current = new ChartJS(ctx, {
       type: 'line',
@@ -149,14 +88,15 @@ const WeatherDashboard = () => {
         datasets: [{
           label: 'Temperature (°C)',
           data: temperatures,
-          borderColor: 'rgb(59, 130, 246)',
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          borderColor: '#06b6d4',
+          backgroundColor: 'rgba(250, 253, 253, 0.1)',
           tension: 0.4,
           borderWidth: 3,
-          pointBackgroundColor: 'rgb(59, 130, 246)',
+          pointBackgroundColor: '#06b6d4',
           pointBorderColor: '#fff',
-          pointBorderWidth: 2,
-          pointRadius: 6
+          pointBorderWidth: 3,
+          pointRadius: 8,
+          pointHoverRadius: 12
         }]
       },
       options: {
@@ -166,25 +106,39 @@ const WeatherDashboard = () => {
           title: {
             display: true,
             text: '24-Hour Temperature Forecast',
-            font: { size: 16, weight: 'bold' },
-            color: '#374151'
+            font: { size: 18, weight: 'bold' },
+            color: '#1f2937'
           },
           legend: {
             labels: {
               color: '#374151',
-              font: { size: 14 }
+              font: { size: 14 },
+              usePointStyle: true,
+              pointStyle: 'circle'
             }
           }
         },
         scales: {
           y: {
             beginAtZero: false,
-            grid: { color: 'rgba(0,0,0,0.1)' },
-            ticks: { color: '#6B7280' }
+            ticks: { 
+              color: '#6B7280',
+              font: { size: 12 }
+            },
+            grid: { 
+              color: 'rgba(107, 114, 128, 0.2)',
+              drawBorder: false
+            }
           },
           x: {
-            grid: { color: 'rgba(0,0,0,0.1)' },
-            ticks: { color: '#6B7280' }
+            ticks: { 
+              color: '#6B7280',
+              font: { size: 12 }
+            },
+            grid: { 
+              color: 'rgba(107, 114, 128, 0.2)',
+              drawBorder: false
+            }
           }
         }
       }
@@ -199,8 +153,10 @@ const WeatherDashboard = () => {
     }
 
     const ctx = humidityChartRef.current.getContext('2d');
-    const labels = forecast.list.map((item, index) => `${index * 3}h`);
-    const humidity = forecast.list.map(item => item.main.humidity);
+    const labels = forecast.list.slice(0, 8).map(item =>
+      new Date(item.dt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    );
+    const humidity = forecast.list.slice(0, 8).map(item => item.main.humidity);
 
     humidityChartInstance.current = new ChartJS(ctx, {
       type: 'bar',
@@ -209,10 +165,10 @@ const WeatherDashboard = () => {
         datasets: [{
           label: 'Humidity (%)',
           data: humidity,
-          backgroundColor: 'rgba(34, 197, 94, 0.7)',
-          borderColor: 'rgb(34, 197, 94)',
+          backgroundColor: 'rgba(16, 185, 129, 0.8)',
+          borderColor: '#10b981',
           borderWidth: 2,
-          borderRadius: 8,
+          borderRadius: 12,
           borderSkipped: false
         }]
       },
@@ -223,13 +179,15 @@ const WeatherDashboard = () => {
           title: {
             display: true,
             text: '24-Hour Humidity Forecast',
-            font: { size: 16, weight: 'bold' },
-            color: '#374151'
+            font: { size: 18, weight: 'bold' },
+            color: '#1f2937'
           },
           legend: {
             labels: {
               color: '#374151',
-              font: { size: 14 }
+              font: { size: 14 },
+              usePointStyle: true,
+              pointStyle: 'rect'
             }
           }
         },
@@ -237,12 +195,24 @@ const WeatherDashboard = () => {
           y: {
             beginAtZero: true,
             max: 100,
-            grid: { color: 'rgba(0,0,0,0.1)' },
-            ticks: { color: '#6B7280' }
+            ticks: { 
+              color: '#6B7280',
+              font: { size: 12 }
+            },
+            grid: { 
+              color: 'rgba(107, 114, 128, 0.2)',
+              drawBorder: false
+            }
           },
           x: {
-            grid: { color: 'rgba(0,0,0,0.1)' },
-            ticks: { color: '#6B7280' }
+            ticks: { 
+              color: '#6B7280',
+              font: { size: 12 }
+            },
+            grid: { 
+              color: 'rgba(107, 114, 128, 0.2)',
+              drawBorder: false
+            }
           }
         }
       }
@@ -260,28 +230,22 @@ const WeatherDashboard = () => {
     }
 
     return () => {
-      if (tempChartInstance.current) {
-        tempChartInstance.current.destroy();
-      }
-      if (humidityChartInstance.current) {
-        humidityChartInstance.current.destroy();
-      }
+      tempChartInstance.current?.destroy();
+      humidityChartInstance.current?.destroy();
     };
   }, [forecast]);
 
-  const getWeatherIcon = (weatherMain) => {
-    const iconStyle = { width: '80px', height: '80px' };
-    switch (weatherMain?.toLowerCase()) {
+  const getWeatherIcon = (main) => {
+    const iconStyle = { width: '120px', height: '120px' };
+    switch ((main || '').toLowerCase()) {
       case 'clear':
-        return <Sun style={{...iconStyle, color: '#F59E0B'}} />;
+        return <Sun style={{ ...iconStyle, color: '#f59e0b', animation: 'pulse 2s infinite' }} />;
       case 'rain':
-        return <CloudRain style={{...iconStyle, color: '#3B82F6'}} />;
+        return <CloudRain style={{ ...iconStyle, color: '#3b82f6', animation: 'bounce 1s infinite' }} />;
       case 'clouds':
-        return <Cloud style={{...iconStyle, color: '#6B7280'}} />;
-      case 'snow':
-        return <Cloud style={{...iconStyle, color: '#93C5FD'}} />;
+        return <Cloud style={{ ...iconStyle, color: '#6b7280', animation: 'pulse 2s infinite' }} />;
       default:
-        return <Cloud style={{...iconStyle, color: '#6B7280'}} />;
+        return <Cloud style={{ ...iconStyle, color: '#6b7280', animation: 'pulse 2s infinite' }} />;
     }
   };
 
@@ -297,97 +261,384 @@ const WeatherDashboard = () => {
     }
   };
 
+  const styles = {
+    container: {
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg,rgb(255, 255, 255) 0%,rgb(0, 0, 0) 100%)',
+      padding: '20px',
+      fontFamily: 'Arial, sans-serif',
+      position: 'relative',
+      
+      overflow: 'hidden'
+    },
+    backgroundOrb1: {
+      position: 'fixed',
+      top: '-160px',
+      right: '-160px',
+      width: '320px',
+      height: '320px',
+      background: 'rgba(255, 255, 255, 0.1)',
+      borderRadius: '50%',
+      filter: 'blur(40px)',
+      animation: 'float 6s ease-in-out infinite',
+      zIndex: 1
+    },
+    backgroundOrb2: {
+      position: 'fixed',
+      bottom: '-160px',
+      left: '-160px',
+      width: '320px',
+      height: '320px',
+      background: 'rgba(255, 255, 255, 0.1)',
+      borderRadius: '50%',
+      filter: 'blur(40px)',
+      animation: 'float 6s ease-in-out infinite reverse',
+      zIndex: 1
+    },
+    backgroundOrb3: {
+      position: 'fixed',
+      top: '160px',
+      left: '160px',
+      width: '320px',
+      height: '320px',
+      background: 'rgba(255, 255, 255, 0.05)',
+      borderRadius: '50%',
+      filter: 'blur(40px)',
+      animation: 'float 8s ease-in-out infinite',
+      zIndex: 1
+    },
+    content: {
+      position: 'relative',
+      zIndex: 10,
+      maxWidth: '1200px',
+      margin: '0 auto'
+    },
+    header: {
+      textAlign: 'center',
+      marginBottom: '40px',
+      animation: 'fadeInDown 1s ease-out'
+    },
+    title: {
+      fontSize: '3.5rem',
+      fontWeight: 'bold',
+      background: 'linear-gradient(135deg, #667eea, #764ba2)',
+      WebkitBackgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      marginBottom: '10px',
+      textShadow: '0 4px 8px rgba(0,0,0,0.1)'
+    },
+    subtitle: {
+      color: 'rgba(255, 255, 255, 0.8)',
+      fontSize: '1.2rem',
+      fontWeight: '300'
+    },
+    searchContainer: {
+      display: 'flex',
+      justifyContent: 'center',
+      marginBottom: '40px',
+      animation: 'fadeIn 1s ease-out 0.3s both'
+    },
+    searchWrapper: {
+      position: 'relative',
+      display: 'inline-block'
+    },
+    searchBox: {
+      background: 'rgba(255, 255, 255, 0.95)',
+      backdropFilter: 'blur(10px)',
+      borderRadius: '25px',
+      padding: '5px',
+      boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
+      border: '1px solid rgba(255, 255, 255, 0.3)',
+      display: 'flex',
+      alignItems: 'center',
+      transition: 'all 0.3s ease',
+      transform: 'translateY(0)'
+    },
+    searchInput: {
+      border: 'none',
+      outline: 'none',
+      background: 'transparent',
+      padding: '15px 20px',
+      fontSize: '1.1rem',
+      color: '#333',
+      flex: 1,
+      minWidth: '300px'
+    },
+    searchButton: {
+      background: 'linear-gradient(135deg, #667eea, #764ba2)',
+      border: 'none',
+      borderRadius: '20px',
+      padding: '12px 20px',
+      color: 'white',
+      cursor: 'pointer',
+      transition: 'all 0.3s ease',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minWidth: '50px',
+      marginRight: '5px'
+    },
+    error: {
+      background: 'rgba(239, 68, 68, 0.9)',
+      color: 'white',
+      padding: '15px 30px',
+      borderRadius: '15px',
+      textAlign: 'center',
+      marginBottom: '30px',
+      animation: 'shake 0.5s ease-in-out',
+      boxShadow: '0 10px 30px rgba(239, 68, 68, 0.3)'
+    },
+    weatherCard: {
+      background: 'rgba(255, 255, 255, 0.15)',
+      backdropFilter: 'blur(20px)',
+      borderRadius: '30px',
+      padding: '40px',
+      marginBottom: '40px',
+      boxShadow: '0 25px 50px rgba(0,0,0,0.1)',
+      border: '1px solid rgba(255, 255, 255, 0.2)',
+      transition: 'all 1s ease',
+      opacity: isVisible ? 1 : 0,
+      transform: isVisible ? 'translateY(0)' : 'translateY(30px)'
+    },
+    weatherGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+      gap: '40px',
+      alignItems: 'center'
+    },
+    weatherInfo: {
+      color: 'white'
+    },
+    cityName: {
+      fontSize: '2.5rem',
+      fontWeight: 'bold',
+      marginBottom: '10px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px'
+    },
+    date: {
+      fontSize: '1.1rem',
+      opacity: 0.8,
+      marginBottom: '30px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
+    },
+    temperature: {
+      fontSize: '4rem',
+      fontWeight: 'bold',
+      marginBottom: '10px'
+    },
+    description: {
+      fontSize: '1.3rem',
+      textTransform: 'capitalize',
+      marginBottom: '10px'
+    },
+    feelsLike: {
+      fontSize: '1.1rem',
+      opacity: 0.8
+    },
+    weatherIconContainer: {
+      textAlign: 'center'
+    },
+    weatherIcon: {
+      marginBottom: '30px',
+      transition: 'transform 0.3s ease'
+    },
+    statsGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(2, 1fr)',
+      gap: '15px'
+    },
+    statCard: {
+      background: 'rgba(255, 255, 255, 0.2)',
+      padding: '20px',
+      borderRadius: '20px',
+      textAlign: 'center',
+      transition: 'all 0.3s ease'
+    },
+    statIcon: {
+      marginBottom: '10px'
+    },
+    statLabel: {
+      fontSize: '0.9rem',
+      opacity: 0.8,
+      marginBottom: '5px'
+    },
+    statValue: {
+      fontSize: '1.2rem',
+      fontWeight: 'bold'
+    },
+    chartsContainer: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))',
+      gap: '30px',
+      transition: 'all 1s ease 0.3s',
+      opacity: isVisible ? 1 : 0,
+      transform: isVisible ? 'translateY(0)' : 'translateY(30px)'
+    },
+    chartCard: {
+      background: 'rgba(255, 255, 255, 0.15)',
+      backdropFilter: 'blur(20px)',
+      borderRadius: '25px',
+      padding: '25px',
+      boxShadow: '0 25px 50px rgba(0,0,0,0.1)',
+      border: '1px solid rgba(255, 255, 255, 0.2)',
+      transition: 'all 0.3s ease'
+    },
+    chartContainer: {
+      height: '320px',
+      position: 'relative'
+    },
+    spinner: {
+      width: '20px',
+      height: '20px',
+      border: '2px solid rgba(255,255,255,0.3)',
+      borderTop: '2px solid white',
+      borderRadius: '50%',
+      animation: 'spin 1s linear infinite'
+    }
+  };
+
   return (
     <div style={styles.container}>
+      <div style={styles.backgroundOrb1}></div>
+      <div style={styles.backgroundOrb2}></div>
+      <div style={styles.backgroundOrb3}></div>
+      
       <div style={styles.content}>
-        <h1 style={styles.title}>
-          🌤️ Weather Dashboard
-        </h1>
+        <div style={styles.header}>
+          <h1 style={styles.title}>☀️ Weather Dashboard</h1>
+          <p style={styles.subtitle}>Your personal weather companion</p>
+        </div>
 
-        {/* Search Section */}
-        <div style={styles.searchSection}>
-          <div style={styles.searchContainer}>
-            <input
-              type="text"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Enter city name (e.g., London, New York, Tokyo)"
-              style={styles.searchInput}
-            />
-            <button
-              onClick={handleSearch}
-              disabled={loading}
-              style={loading ? {...styles.searchButton, ...styles.searchButtonDisabled} : styles.searchButton}
-            >
-              {loading ? '🔄 Loading...' : '🔍 Search'}
-            </button>
+        <div style={styles.searchContainer}>
+          <div style={styles.searchWrapper}>
+            <div style={styles.searchBox}>
+              <MapPin style={{ marginLeft: '15px', color: '#666' }} size={20} />
+              <input
+                style={styles.searchInput}
+                value={city}
+                onChange={e => setCity(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Enter city name..."
+              />
+              <button 
+                style={styles.searchButton}
+                onClick={handleSearch} 
+                disabled={loading}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = 'scale(1.05)';
+                  e.target.style.boxShadow = '0 10px 25px rgba(102, 126, 234, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'scale(1)';
+                  e.target.style.boxShadow = 'none';
+                }}
+              >
+                {loading ? (
+                  <div style={styles.spinner}></div>
+                ) : (
+                  <Search size={20} />
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
         {error && (
-          <div style={styles.errorMessage}>
-            ⚠️ {error}
+          <div style={styles.error}>
+            {error}
           </div>
         )}
 
-        {/* Current Weather Card */}
         {currentWeather && (
           <div style={styles.weatherCard}>
-            <div style={styles.weatherHeader}>
-              <div style={styles.locationInfo}>
-                <MapPin style={styles.locationIcon} />
-                <h2 style={styles.cityName}>
+            <div style={styles.weatherGrid}>
+              <div style={styles.weatherInfo}>
+                <div style={styles.cityName}>
+                  <MapPin size={28} />
                   {currentWeather.name}
-                </h2>
-              </div>
-              <div style={styles.dateInfo}>
-                <Calendar style={styles.dateIcon} />
-                <span style={styles.dateText}>{new Date().toLocaleDateString()}</span>
-              </div>
-            </div>
+                </div>
+                
+                <div style={styles.date}>
+                  <Calendar size={20} />
+                  {new Date().toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </div>
 
-            <div style={styles.weatherContent}>
-              <div style={styles.mainWeatherInfo}>
-                <div style={styles.weatherIconContainer}>
+                <div style={styles.temperature}>
+                  {Math.round(currentWeather.main.temp)}°C
+                </div>
+                <div style={styles.description}>
+                  {currentWeather.weather[0]?.description}
+                </div>
+                <div style={styles.feelsLike}>
+                  Feels like {Math.round(currentWeather.main.feels_like)}°C
+                </div>
+              </div>
+
+              <div style={styles.weatherIconContainer}>
+                <div 
+                  style={styles.weatherIcon}
+                  onMouseEnter={(e) => e.target.style.transform = 'scale(1.1)'}
+                  onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+                >
                   {getWeatherIcon(currentWeather.weather[0]?.main)}
                 </div>
-                <div style={styles.temperatureInfo}>
-                  <div style={styles.temperature}>
-                    {Math.round(currentWeather.main.temp)}°C
+                
+                <div style={styles.statsGrid}>
+                  <div 
+                    style={{...styles.statCard, background: 'rgba(59, 130, 246, 0.2)'}}
+                    onMouseEnter={(e) => e.target.style.transform = 'translateY(-5px)'}
+                    onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
+                  >
+                    <div style={styles.statIcon}>
+                      <Droplets color="#3b82f6" size={24} />
+                    </div>
+                    <div style={styles.statLabel}>Humidity</div>
+                    <div style={styles.statValue}>{currentWeather.main.humidity}%</div>
                   </div>
-                  <div style={styles.weatherDescription}>
-                    {currentWeather.weather[0]?.description}
+                  
+                  <div 
+                    style={{...styles.statCard, background: 'rgba(16, 185, 129, 0.2)'}}
+                    onMouseEnter={(e) => e.target.style.transform = 'translateY(-5px)'}
+                    onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
+                  >
+                    <div style={styles.statIcon}>
+                      <Wind color="#10b981" size={24} />
+                    </div>
+                    <div style={styles.statLabel}>Wind Speed</div>
+                    <div style={styles.statValue}>{currentWeather.wind.speed} m/s</div>
                   </div>
-                  <div style={styles.feelsLike}>
-                    Feels like {Math.round(currentWeather.main.feels_like)}°C
+                  
+                  <div 
+                    style={{...styles.statCard, background: 'rgba(168, 85, 247, 0.2)'}}
+                    onMouseEnter={(e) => e.target.style.transform = 'translateY(-5px)'}
+                    onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
+                  >
+                    <div style={styles.statIcon}>
+                      <Eye color="#a855f7" size={24} />
+                    </div>
+                    <div style={styles.statLabel}>Pressure</div>
+                    <div style={styles.statValue}>{currentWeather.main.pressure} hPa</div>
                   </div>
-                </div>
-              </div>
-
-              <div style={styles.weatherStats}>
-                <div style={styles.statCard}>
-                  <div style={styles.statLabel}>💧 Humidity</div>
-                  <div style={styles.statValue}>
-                    {currentWeather.main.humidity}%
-                  </div>
-                </div>
-                <div style={styles.statCard}>
-                  <div style={styles.statLabel}>💨 Wind Speed</div>
-                  <div style={styles.statValue}>
-                    {currentWeather.wind.speed} m/s
-                  </div>
-                </div>
-                <div style={styles.statCard}>
-                  <div style={styles.statLabel}>🌡️ Pressure</div>
-                  <div style={styles.statValue}>
-                    {currentWeather.main.pressure} hPa
-                  </div>
-                </div>
-                <div style={styles.statCard}>
-                  <div style={styles.statLabel}>👁️ Visibility</div>
-                  <div style={styles.statValue}>
-                    Good
+                  
+                  <div 
+                    style={{...styles.statCard, background: 'rgba(245, 158, 11, 0.2)'}}
+                    onMouseEnter={(e) => e.target.style.transform = 'translateY(-5px)'}
+                    onMouseLeave={(e) => e.target.style.transform = 'translateY(0)'}
+                  >
+                    <div style={styles.statIcon}>
+                      <Thermometer color="#f59e0b" size={24} />
+                    </div>
+                    <div style={styles.statLabel}>Visibility</div>
+                    <div style={styles.statValue}>{(currentWeather.visibility / 1000).toFixed(1)} km</div>
                   </div>
                 </div>
               </div>
@@ -395,269 +646,139 @@ const WeatherDashboard = () => {
           </div>
         )}
 
-        {/* Charts Section */}
         {forecast && (
           <div style={styles.chartsContainer}>
-            <div style={styles.chartCard}>
-              <canvas ref={tempChartRef} style={styles.chartCanvas} />
+            <div 
+              style={styles.chartCard}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-5px)';
+                e.target.style.boxShadow = '0 35px 70px rgba(0,0,0,0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 25px 50px rgba(0,0,0,0.1)';
+              }}
+            >
+              <div style={styles.chartContainer}>
+                <canvas ref={tempChartRef} style={{ width: '100%', height: '100%' }}></canvas>
+              </div>
             </div>
-            <div style={styles.chartCard}>
-              <canvas ref={humidityChartRef} style={styles.chartCanvas} />
+            
+            <div 
+              style={styles.chartCard}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-5px)';
+                e.target.style.boxShadow = '0 35px 70px rgba(0,0,0,0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 25px 50px rgba(0,0,0,0.1)';
+              }}
+            >
+              <div style={styles.chartContainer}>
+                <canvas ref={humidityChartRef} style={{ width: '100%', height: '100%' }}></canvas>
+              </div>
             </div>
           </div>
         )}
-
-        {/* API Key Notice */}
-        <div style={styles.notice}>
-          <div style={styles.noticeContent}>
-            <p style={styles.noticeText}>
-              <strong>🎭 Demo Mode:</strong> Currently showing dynamic mock data. Try searching for different cities like: 
-              London, New York, Tokyo, Paris, Mumbai, Sydney, Dubai, Moscow.
-              <br />
-              <strong>🔑 For Real Data:</strong> Replace the API key with your actual OpenWeatherMap API key from{' '}
-              <a href="https://openweathermap.org/api" style={styles.noticeLink}>openweathermap.org/api</a>
-            </p>
-          </div>
-        </div>
       </div>
+
+      <style>{`
+        @keyframes fadeInDown {
+          from {
+            opacity: 0;
+            transform: translateY(-30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+        
+        @keyframes float {
+          0%, 100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-20px);
+          }
+        }
+        
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.7;
+          }
+        }
+        
+        @keyframes bounce {
+          0%, 20%, 53%, 80%, 100% {
+            transform: translate3d(0,0,0);
+          }
+          40%, 43% {
+            transform: translate3d(0, -5px, 0);
+          }
+          70% {
+            transform: translate3d(0, -3px, 0);
+          }
+          90% {
+            transform: translate3d(0, -1px, 0);
+          }
+        }
+        
+        @keyframes shake {
+          0%, 100% {
+            transform: translateX(0);
+          }
+          25% {
+            transform: translateX(-5px);
+          }
+          75% {
+            transform: translateX(5px);
+          }
+        }
+        
+        @keyframes spin {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
+        }
+        
+        @media (max-width: 768px) {
+          .weather-grid {
+            grid-template-columns: 1fr;
+            text-align: center;
+          }
+          
+          .charts-container {
+            grid-template-columns: 1fr;
+          }
+          
+          .search-input {
+            min-width: 200px;
+          }
+          
+          .title {
+            font-size: 2.5rem;
+          }
+        }
+      `}</style>
     </div>
   );
 };
-
-const styles = {
-  container: {
-    minHeight: '100vh',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    padding: '20px',
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
-  },
-  content: {
-    maxWidth: '1200px',
-    margin: '0 auto'
-  },
-  title: {
-    fontSize: '3rem',
-    fontWeight: 'bold',
-    color: 'white',
-    textAlign: 'center',
-    marginBottom: '2rem',
-    textShadow: '2px 2px 4px rgba(0,0,0,0.3)',
-    letterSpacing: '1px'
-  },
-  searchSection: {
-    marginBottom: '2rem'
-  },
-  searchContainer: {
-    display: 'flex',
-    gap: '12px',
-    maxWidth: '500px',
-    margin: '0 auto'
-  },
-  searchInput: {
-    flex: 1,
-    padding: '15px 20px',
-    borderRadius: '25px',
-    border: 'none',
-    fontSize: '16px',
-    outline: 'none',
-    boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-    transition: 'all 0.3s ease',
-    background: 'rgba(255,255,255,0.95)'
-  },
-  searchButton: {
-    padding: '15px 25px',
-    background: 'linear-gradient(45deg, #FF6B6B, #4ECDC4)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '25px',
-    fontSize: '16px',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
-    minWidth: '120px'
-  },
-  searchButtonDisabled: {
-    opacity: 0.7,
-    cursor: 'not-allowed'
-  },
-  errorMessage: {
-    background: 'linear-gradient(45deg, #FF6B6B, #FF8E53)',
-    color: 'white',
-    padding: '15px',
-    borderRadius: '15px',
-    marginBottom: '1.5rem',
-    textAlign: 'center',
-    fontSize: '16px',
-    fontWeight: '500',
-    boxShadow: '0 4px 15px rgba(255,107,107,0.3)'
-  },
-  weatherCard: {
-    background: 'rgba(255,255,255,0.95)',
-    borderRadius: '25px',
-    padding: '30px',
-    marginBottom: '2rem',
-    boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
-    backdropFilter: 'blur(10px)',
-    border: '1px solid rgba(255,255,255,0.2)'
-  },
-  weatherHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '25px',
-    flexWrap: 'wrap',
-    gap: '15px'
-  },
-  locationInfo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px'
-  },
-  locationIcon: {
-    width: '24px',
-    height: '24px',
-    color: '#6B7280'
-  },
-  cityName: {
-    fontSize: '2rem',
-    fontWeight: '700',
-    color: '#1F2937',
-    margin: 0
-  },
-  dateInfo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    color: '#6B7280'
-  },
-  dateIcon: {
-    width: '18px',
-    height: '18px'
-  },
-  dateText: {
-    fontSize: '16px'
-  },
-  weatherContent: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '30px',
-    alignItems: 'center'
-  },
-  mainWeatherInfo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '25px'
-  },
-  weatherIconContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  temperatureInfo: {
-    display: 'flex',
-    flexDirection: 'column'
-  },
-  temperature: {
-    fontSize: '4rem',
-    fontWeight: 'bold',
-    color: '#1F2937',
-    lineHeight: 1,
-    background: 'linear-gradient(45deg, #667eea, #764ba2)',
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-    backgroundClip: 'text'
-  },
-  weatherDescription: {
-    color: '#6B7280',
-    fontSize: '18px',
-    textTransform: 'capitalize',
-    marginTop: '5px'
-  },
-  feelsLike: {
-    fontSize: '14px',
-    color: '#9CA3AF',
-    marginTop: '5px'
-  },
-  weatherStats: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '15px'
-  },
-  statCard: {
-    background: 'linear-gradient(135deg, #f8fafc, #e2e8f0)',
-    padding: '20px',
-    borderRadius: '15px',
-    textAlign: 'center',
-    border: '1px solid rgba(0,0,0,0.05)',
-    transition: 'transform 0.2s ease',
-    cursor: 'default'
-  },
-  statLabel: {
-    fontSize: '14px',
-    color: '#6B7280',
-    fontWeight: '500',
-    marginBottom: '8px'
-  },
-  statValue: {
-    fontSize: '1.5rem',
-    fontWeight: 'bold',
-    color: '#1F2937'
-  },
-  chartsContainer: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '30px',
-    marginBottom: '2rem'
-  },
-  chartCard: {
-    background: 'rgba(255,255,255,0.95)',
-    borderRadius: '20px',
-    padding: '25px',
-    boxShadow: '0 15px 35px rgba(0,0,0,0.1)',
-    backdropFilter: 'blur(10px)',
-    border: '1px solid rgba(255,255,255,0.2)'
-  },
-  chartCanvas: {
-    maxWidth: '100%',
-    height: '300px'
-  },
-  notice: {
-    background: 'linear-gradient(135deg, #FEF3C7, #FDE68A)',
-    borderLeft: '5px solid #F59E0B',
-    borderRadius: '15px',
-    padding: '20px',
-    marginTop: '2rem',
-    boxShadow: '0 10px 25px rgba(245,158,11,0.2)'
-  },
-  noticeContent: {
-    marginLeft: '15px'
-  },
-  noticeText: {
-    fontSize: '14px',
-    color: '#92400E',
-    lineHeight: '1.6',
-    margin: 0
-  },
-  noticeLink: {
-    color: '#1D4ED8',
-    textDecoration: 'underline',
-    fontWeight: '500'
-  }
-};
-
-// Responsive styles
-const mediaQuery = window.matchMedia('(max-width: 768px)');
-if (mediaQuery.matches) {
-  styles.weatherContent.gridTemplateColumns = '1fr';
-  styles.weatherContent.gap = '20px';
-  styles.chartsContainer.gridTemplateColumns = '1fr';
-  styles.mainWeatherInfo.flexDirection = 'column';
-  styles.mainWeatherInfo.textAlign = 'center';
-  styles.title.fontSize = '2.5rem';
-  styles.searchContainer.flexDirection = 'column';
-  styles.weatherHeader.flexDirection = 'column';
-  styles.weatherHeader.textAlign = 'center';
-}
 
 export default WeatherDashboard;
